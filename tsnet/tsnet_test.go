@@ -58,6 +58,7 @@ import (
 	"tailscale.com/types/ipproto"
 	"tailscale.com/types/key"
 	"tailscale.com/types/logger"
+	"tailscale.com/types/netmap"
 	"tailscale.com/types/views"
 	"tailscale.com/util/mak"
 	"tailscale.com/util/must"
@@ -1198,18 +1199,20 @@ func TestListenService(t *testing.T) {
 			// see our control updates before we can start the test.
 			must.Do(control.ForceNetmapUpdate(ctx, serviceHost.lb.NodeKey()))
 			must.Do(control.ForceNetmapUpdate(ctx, serviceClient.lb.NodeKey()))
-			netmapUpToDate := func(s *Server) bool {
-				nm := s.lb.NetMap()
-				return slices.ContainsFunc(nm.DNS.ExtraRecords, func(r tailcfg.DNSRecord) bool {
+			netmapUpToDate := func(nm *netmap.NetworkMap) bool {
+				return nm != nil && slices.ContainsFunc(nm.DNS.ExtraRecords, func(r tailcfg.DNSRecord) bool {
 					return r.Value == serviceVIP
 				})
 			}
-			for !netmapUpToDate(serviceClient) {
-				time.Sleep(10 * time.Millisecond)
+			waitForLatestNetmap := func(t *testing.T, s *Server) {
+				t.Helper()
+				w := must.Get(s.localClient.WatchIPNBus(t.Context(), ipn.NotifyInitialNetMap))
+				defer w.Close()
+				for n := must.Get(w.Next()); !netmapUpToDate(n.NetMap); n = must.Get(w.Next()) {
+				}
 			}
-			for !netmapUpToDate(serviceHost) {
-				time.Sleep(10 * time.Millisecond)
-			}
+			waitForLatestNetmap(t, serviceClient)
+			waitForLatestNetmap(t, serviceHost)
 
 			// == Done setting up mock state ==
 
