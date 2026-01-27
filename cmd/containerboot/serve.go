@@ -22,6 +22,7 @@ import (
 	"tailscale.com/ipn"
 	"tailscale.com/kube/certs"
 	"tailscale.com/kube/kubetypes"
+	"tailscale.com/kube/localclient"
 	klc "tailscale.com/kube/localclient"
 	"tailscale.com/kube/services"
 	"tailscale.com/types/netmap"
@@ -83,7 +84,7 @@ func watchServeConfigChanges(ctx context.Context, cdChanged <-chan bool, certDom
 		if prevServeConfig != nil && reflect.DeepEqual(sc, prevServeConfig) {
 			continue
 		}
-		if err := updateServeConfig(ctx, sc, certDomain, lc); err != nil {
+		if err := updateServeConfig(ctx, sc, certDomain, localclient.New(lc)); err != nil {
 			log.Fatalf("serve proxy: error updating serve config: %v", err)
 		}
 		if kc != nil && kc.canPatch {
@@ -130,13 +131,7 @@ func certDomainFromNetmap(nm *netmap.NetworkMap) string {
 	return nm.DNS.CertDomains[0]
 }
 
-// localClient is a subset of [local.Client] that can be mocked for testing.
-type localClient interface {
-	SetServeConfig(context.Context, *ipn.ServeConfig) error
-	CertPair(context.Context, string) ([]byte, []byte, error)
-}
-
-func updateServeConfig(ctx context.Context, sc *ipn.ServeConfig, certDomain string, lc localClient) error {
+func updateServeConfig(ctx context.Context, sc *ipn.ServeConfig, certDomain string, lc localclient.LocalClient) error {
 	if !isValidHTTPSConfig(certDomain, sc) {
 		return nil
 	}

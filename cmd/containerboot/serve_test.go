@@ -12,9 +12,9 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"tailscale.com/client/local"
 	"tailscale.com/ipn"
 	"tailscale.com/kube/kubetypes"
+	"tailscale.com/kube/localclient"
 )
 
 func TestUpdateServeConfig(t *testing.T) {
@@ -65,13 +65,13 @@ func TestUpdateServeConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fakeLC := &fakeLocalClient{}
+			fakeLC := &localclient.FakeLocalClient{}
 			err := updateServeConfig(context.Background(), tt.sc, tt.certDomain, fakeLC)
 			if err != nil {
 				t.Errorf("updateServeConfig() error = %v", err)
 			}
-			if fakeLC.setServeCalled != tt.wantCall {
-				t.Errorf("SetServeConfig() called = %v, want %v", fakeLC.setServeCalled, tt.wantCall)
+			if fakeLC.SetServeCalled != tt.wantCall {
+				t.Errorf("SetServeConfig() called = %v, want %v", fakeLC.SetServeCalled, tt.wantCall)
 			}
 		})
 	}
@@ -196,18 +196,8 @@ func TestReadServeConfig(t *testing.T) {
 	}
 }
 
-type fakeLocalClient struct {
-	*local.Client
-	setServeCalled bool
-}
 
-func (m *fakeLocalClient) SetServeConfig(ctx context.Context, cfg *ipn.ServeConfig) error {
-	m.setServeCalled = true
-	return nil
-}
 
-func (m *fakeLocalClient) CertPair(ctx context.Context, domain string) (certPEM, keyPEM []byte, err error) {
-	return nil, nil, nil
 }
 
 func TestHasHTTPSEndpoint(t *testing.T) {
