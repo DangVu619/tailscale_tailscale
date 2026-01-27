@@ -22,7 +22,6 @@ import (
 	"tailscale.com/ipn"
 	"tailscale.com/kube/certs"
 	"tailscale.com/kube/kubetypes"
-	"tailscale.com/kube/localclient"
 	klc "tailscale.com/kube/localclient"
 	"tailscale.com/kube/services"
 	"tailscale.com/types/netmap"
@@ -73,41 +72,49 @@ func watchServeConfigChanges(ctx context.Context, cdChanged <-chan bool, certDom
 			// k8s handles these mounts. So just re-read the file and apply it
 			// if it's changed.
 		}
-		sc, err := readServeConfig(cfg.ServeConfigPath, certDomain)
-		if err != nil {
-			log.Fatalf("serve proxy: failed to read serve config: %v", err)
-		}
-		if sc == nil {
-			log.Printf("serve proxy: no serve config at %q, skipping", cfg.ServeConfigPath)
-			continue
-		}
-		if prevServeConfig != nil && reflect.DeepEqual(sc, prevServeConfig) {
-			continue
-		}
-		if err := updateServeConfig(ctx, sc, certDomain, localclient.New(lc)); err != nil {
-			log.Fatalf("serve proxy: error updating serve config: %v", err)
-		}
-		if kc != nil && kc.canPatch {
-			if err := kc.storeHTTPSEndpoint(ctx, certDomain); err != nil {
-				log.Fatalf("serve proxy: error storing HTTPS endpoint: %v", err)
+
+		var sc *ipn.ServeConfig
+		if cfg.ServeConfigPath != "" {
+			sc, err := readServeConfig(cfg.ServeConfigPath, certDomain)
+			if err != nil {
+				log.Fatalf("serve proxy: failed to read serve config: %v", err)
 			}
+			if sc == nil {
+				log.Printf("serve proxy: no serve config at %q, skipping", cfg.ServeConfigPath)
+				continue
+			}
+			if prevServeConfig != nil && reflect.DeepEqual(sc, prevServeConfig) {
+				continue
+			}
+			if err := updateServeConfig(ctx, sc, certDomain, klc.New(lc)); err != nil {
+				log.Fatalf("serve proxy: error updating serve config: %v", err)
+			}
+			if kc != nil && kc.canPatch {
+				if err := kc.storeHTTPSEndpoint(ctx, certDomain); err != nil {
+					log.Fatalf("serve proxy: error storing HTTPS endpoint: %v", err)
+				}
+			}
+			prevServeConfig = sc
+			if cfg.CertShareMode != "rw" {
+				continue
+			}
+			if err := cm.EnsureCertLoops(ctx, sc); err != nil {
+				log.Fatalf("serve proxy: error ensuring cert loops: %v", err)
+			}
+		} else {
+			log.Printf("serve config path not provided.")
+			sc = prevServeConfig
 		}
-		prevServeConfig = sc
+
 		if defaultBool("TS_EXPERIMENTAL_SERVICE_AUTO_ADVERTISEMENT", false) {
-			if err := refreshAdvertiseServices(ctx, sc, localclient.New(lc)); err != nil {
+			if err := refreshAdvertiseServices(ctx, sc, klc.New(lc)); err != nil {
 				log.Fatalf("error refreshing advertised services: %v", err)
 			}
-		}
-		if cfg.CertShareMode != "rw" {
-			continue
-		}
-		if err := cm.EnsureCertLoops(ctx, sc); err != nil {
-			log.Fatalf("serve proxy: error ensuring cert loops: %v", err)
 		}
 	}
 }
 
-func refreshAdvertiseServices(ctx context.Context, sc *ipn.ServeConfig, lc localclient.LocalClient) error {
+func refreshAdvertiseServices(ctx context.Context, sc *ipn.ServeConfig, lc klc.LocalClient) error {
 	if sc != nil && len(sc.Services) > 0 {
 		var svcs []string
 		for svc := range sc.Services {
@@ -131,7 +138,7 @@ func certDomainFromNetmap(nm *netmap.NetworkMap) string {
 	return nm.DNS.CertDomains[0]
 }
 
-func updateServeConfig(ctx context.Context, sc *ipn.ServeConfig, certDomain string, lc localclient.LocalClient) error {
+func updateServeConfig(ctx context.Context, sc *ipn.ServeConfig, certDomain string, lc klc.LocalClient) error {
 	if !isValidHTTPSConfig(certDomain, sc) {
 		return nil
 	}
