@@ -229,8 +229,11 @@ func run() error {
 		ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 		defer cancel()
 
-		if err := services.EnsureServicesNotAdvertised(ctx, client, log.Printf); err != nil {
-			log.Printf("Error ensuring services are not advertised: %v", err)
+		// we always want to unadvertise, we know that the container is shutting down
+		if defaultBool("TS_EXPERIMENTAL_SERVICE_AUTO_ADVERTISEMENT", false) {
+			if err := services.EnsureServicesNotAdvertised(ctx, client, log.Printf); err != nil {
+				log.Printf("Error ensuring services are not advertised: %v", err)
+			}
 		}
 
 		if hasKubeStateStore(cfg) {

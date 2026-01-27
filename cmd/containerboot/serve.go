@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -22,6 +23,7 @@ import (
 	"tailscale.com/kube/certs"
 	"tailscale.com/kube/kubetypes"
 	klc "tailscale.com/kube/localclient"
+	"tailscale.com/kube/services"
 	"tailscale.com/types/netmap"
 )
 
@@ -90,6 +92,11 @@ func watchServeConfigChanges(ctx context.Context, cdChanged <-chan bool, certDom
 			}
 		}
 		prevServeConfig = sc
+		if defaultBool("TS_EXPERIMENTAL_SERVICE_AUTO_ADVERTISEMENT", false) {
+			if err := refreshAdvertiseServices(ctx, sc, localclient.New(lc)); err != nil {
+				log.Fatalf("error refreshing advertised services: %v", err)
+			}
+		}
 		if cfg.CertShareMode != "rw" {
 			continue
 		}
@@ -97,6 +104,23 @@ func watchServeConfigChanges(ctx context.Context, cdChanged <-chan bool, certDom
 			log.Fatalf("serve proxy: error ensuring cert loops: %v", err)
 		}
 	}
+}
+
+func refreshAdvertiseServices(ctx context.Context, sc *ipn.ServeConfig, lc localclient.LocalClient) error {
+	if sc != nil && len(sc.Services) > 0 {
+		var svcs []string
+		for svc := range sc.Services {
+			svcs = append(svcs, svc.String())
+		}
+
+		err := services.EnsureServicesAdvertised(ctx, svcs, lc, log.Printf)
+		if err != nil {
+			return fmt.Errorf("failed to ensure services advertised: %w", err)
+		}
+	} else {
+		log.Printf("autoadvertisement: 0 services defined in serve config")
+	}
+	return nil
 }
 
 func certDomainFromNetmap(nm *netmap.NetworkMap) string {
