@@ -1013,8 +1013,7 @@ func TestContainerBoot(t *testing.T) {
 			return testCase{
 				Env: map[string]string{
 					"TS_SERVE_CONFIG": filepath.Join(env.d, "etc/tailscaled/serve-config-with-services.json"),
-					"TS_EXPERIMENTAL_SERVICE_AUTO_ADVERTISEMENT": "true",
-					"TS_AUTHKEY": "tskey-key",
+					"TS_AUTHKEY":      "tskey-key",
 				},
 				Phases: []phase{
 					{

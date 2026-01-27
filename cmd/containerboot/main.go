@@ -156,6 +156,10 @@ func newNetfilterRunner(logf logger.Logf) (linuxfw.NetfilterRunner, error) {
 	return linuxfw.New(logf, "")
 }
 
+func getAutoAdvertiseBool() bool {
+	return defaultBool("TS_EXPERIMENTAL_SERVICE_AUTO_ADVERTISEMENT", true)
+}
+
 func main() {
 	if err := run(); err != nil && !errors.Is(err, context.Canceled) {
 		log.Fatal(err)
@@ -657,14 +661,15 @@ runLoop:
 				}
 
 				var prevServeConfig *ipn.ServeConfig
-				if defaultBool("TS_EXPERIMENTAL_SERVICE_AUTO_ADVERTISEMENT", false) {
+				if getAutoAdvertiseBool() {
 					prevServeConfig, err := client.GetServeConfig(ctx)
 					if err != nil {
-						log.Fatalf("serve proxy: failed to get serve config: %v", err)
+						return fmt.Errorf("serve proxy: failed to get serve config: %w", err)
 					}
 
-					if err := refreshAdvertiseServices(ctx, prevServeConfig, klc.New(client)); err != nil {
-						log.Fatalf("error refreshing advertised services: %v", err)
+					err = refreshAdvertiseServices(ctx, prevServeConfig, klc.New(client))
+					if err != nil {
+						return fmt.Errorf("serve proxy: failed to refresh advertise services: %w", err)
 					}
 				}
 

@@ -114,7 +114,7 @@ func watchServeConfigChanges(ctx context.Context, cdChanged <-chan bool, certDom
 			sc = prevServeConfig
 		}
 
-		if defaultBool("TS_EXPERIMENTAL_SERVICE_AUTO_ADVERTISEMENT", false) {
+		if getAutoAdvertiseBool() {
 			if err := refreshAdvertiseServices(ctx, sc, klc.New(lc)); err != nil {
 				log.Fatalf("error refreshing advertised services: %v", err)
 			}
@@ -123,19 +123,16 @@ func watchServeConfigChanges(ctx context.Context, cdChanged <-chan bool, certDom
 }
 
 func refreshAdvertiseServices(ctx context.Context, sc *ipn.ServeConfig, lc klc.LocalClient) error {
-	if sc != nil && len(sc.Services) > 0 {
-		var svcs []string
-		for svc := range sc.Services {
-			svcs = append(svcs, svc.String())
-		}
-
-		err := services.EnsureServicesAdvertised(ctx, svcs, lc, log.Printf)
-		if err != nil {
-			return fmt.Errorf("failed to ensure services advertised: %w", err)
-		}
-	} else {
-		log.Printf("autoadvertisement: 0 services defined in serve config")
+	var svcs []string
+	for svc := range sc.Services {
+		svcs = append(svcs, svc.String())
 	}
+
+	err := services.EnsureServicesAdvertised(ctx, svcs, lc, log.Printf)
+	if err != nil {
+		return fmt.Errorf("failed to ensure services advertised: %w", err)
+	}
+
 	return nil
 }
 
