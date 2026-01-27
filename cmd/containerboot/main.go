@@ -137,6 +137,7 @@ import (
 	kubeutils "tailscale.com/k8s-operator"
 	healthz "tailscale.com/kube/health"
 	"tailscale.com/kube/kubetypes"
+	klc "tailscale.com/kube/localclient"
 	"tailscale.com/kube/metrics"
 	"tailscale.com/kube/services"
 	"tailscale.com/tailcfg"
@@ -655,11 +656,21 @@ runLoop:
 					healthCheck.Update(len(addrs) != 0)
 				}
 
-				if cfg.ServeConfigPath != "" {
-					triggerWatchServeConfigChanges.Do(func() {
-						go watchServeConfigChanges(ctx, certDomainChanged, certDomain, client, kc, cfg)
-					})
+				var prevServeConfig *ipn.ServeConfig
+				if defaultBool("TS_EXPERIMENTAL_SERVICE_AUTO_ADVERTISEMENT", false) {
+					prevServeConfig, err := client.GetServeConfig(ctx)
+					if err != nil {
+						log.Fatalf("serve proxy: failed to get serve config: %v", err)
+					}
+
+					if err := refreshAdvertiseServices(ctx, prevServeConfig, klc.New(client)); err != nil {
+						log.Fatalf("error refreshing advertised services: %v", err)
+					}
 				}
+
+				triggerWatchServeConfigChanges.Do(func() {
+					go watchServeConfigChanges(ctx, certDomainChanged, certDomain, client, kc, cfg, prevServeConfig)
+				})
 
 				if egressSvcsNotify != nil {
 					egressSvcsNotify <- n

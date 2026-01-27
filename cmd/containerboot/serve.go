@@ -31,8 +31,9 @@ import (
 // the serve config from it, replacing ${TS_CERT_DOMAIN} with certDomain, and
 // applies it to lc. It exits when ctx is canceled. cdChanged is a channel that
 // is written to when the certDomain changes, causing the serve config to be
-// re-read and applied.
-func watchServeConfigChanges(ctx context.Context, cdChanged <-chan bool, certDomainAtomic *atomic.Pointer[string], lc *local.Client, kc *kubeClient, cfg *settings) {
+// re-read and applied. prevServeConfig is the serve config that was fetched
+// during startup. This will be refreshed by the goroutine when serve config changes.
+func watchServeConfigChanges(ctx context.Context, cdChanged <-chan bool, certDomainAtomic *atomic.Pointer[string], lc *local.Client, kc *kubeClient, cfg *settings, prevServeConfig *ipn.ServeConfig) {
 	if certDomainAtomic == nil {
 		panic("certDomainAtomic must not be nil")
 	}
@@ -55,10 +56,17 @@ func watchServeConfigChanges(ctx context.Context, cdChanged <-chan bool, certDom
 	}
 
 	var certDomain string
-	var prevServeConfig *ipn.ServeConfig
 	var cm *certs.CertManager
 	if cfg.CertShareMode == "rw" {
 		cm = certs.NewCertManager(klc.New(lc), log.Printf)
+	}
+
+	var err error
+	if prevServeConfig == nil {
+		prevServeConfig, err = lc.GetServeConfig(ctx)
+		if err != nil {
+			log.Fatalf("serve proxy: failed to get serve config: %v", err)
+		}
 	}
 	for {
 		select {
