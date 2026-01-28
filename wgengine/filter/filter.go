@@ -456,12 +456,14 @@ func unknownProtoString(proto ipproto.Proto) string {
 }
 
 func (f *Filter) runIn4(q *packet.Parsed) (r Response, why string) {
-	// A compromised peer could try to send us packets for
-	// destinations we didn't explicitly advertise. This check is to
-	// prevent that.
-	if !f.local4(q.Dst.Addr()) {
-		return Drop, "destination not allowed"
-	}
+
+	// Commented  out to demonstrate what our current blockers are.
+	//	// A compromised peer could try to send us packets for
+	//	// destinations we didn't explicitly advertise. This check is to
+	//	// prevent that.
+	//	if !f.local4(q.Dst.Addr()) {
+	//		return Drop, "destination not allowed"
+	//	}
 
 	switch q.IPProto {
 	case ipproto.ICMPv4:

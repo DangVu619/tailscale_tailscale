@@ -39,8 +39,6 @@ func (dh *datapathHandler) HandlePacketsFromTunDevice(p *packet.Parsed) filter.R
 	log.Printf("Handling packet from tun device: %s", p.String())
 	// Connector-bound traffic.
 	if dh.dstIPIsMagicIP(p) {
-		// TODO: don't swallow this error. Check it maybe change the filter response
-		// accordingly.
 		if err := dh.processClientToConnector(p); err != nil {
 			// TODO: log error? return error?
 			// Packets with a destination Magic IP, that we don't know
