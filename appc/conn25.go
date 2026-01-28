@@ -11,6 +11,7 @@ import (
 
 	"tailscale.com/tailcfg"
 	"tailscale.com/types/appctype"
+	"tailscale.com/types/netmap"
 	"tailscale.com/util/mak"
 	"tailscale.com/util/set"
 )
@@ -20,6 +21,18 @@ import (
 type Conn25 struct {
 	mu         sync.Mutex
 	transitIPs map[tailcfg.NodeID]map[netip.Addr]netip.Addr
+}
+
+func NewConn25() *Conn25 {
+	return &Conn25{}
+}
+
+func (c *Conn25) Reconfig(nm *netmap.NetworkMap) error {
+	return nil
+}
+
+func (c *Conn25) MapDNSResponse(buf []byte) []byte {
+	return buf
 }
 
 const dupeTransitIPMessage = "Duplicate transit address in ConnectorTransitIPRequest"
