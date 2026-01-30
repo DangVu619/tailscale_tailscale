@@ -4,8 +4,6 @@
 package ipnlocal
 
 import (
-	"errors"
-
 	"tailscale.com/feature/buildfeatures"
 	"tailscale.com/ipn/ipnlocal/netmapcache"
 	"tailscale.com/types/netmap"
@@ -25,10 +23,6 @@ func (b *LocalBackend) writeNetmapToDiskLocked(nm *netmap.NetworkMap) error {
 	}
 	b.logf("writing netmap to disk cache")
 
-	selfUID := nm.User()
-	if selfUID == 0 {
-		return errors.New("no user in netmap")
-	}
 	dir, err := b.profileMkdirAllLocked(b.pm.CurrentProfile().ID(), "netmap-cache")
 	if err != nil {
 		return err
