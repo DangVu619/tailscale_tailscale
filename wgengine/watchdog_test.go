@@ -32,8 +32,9 @@ func TestWatchdog(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		mr := new(usermetric.Registry)
 
-		e = NewWatchdog(e)
+		e = NewWatchdog(e, mr)
 		e.(*watchdogEngine).maxWait = maxWaitMultiple * 150 * time.Millisecond
 		e.(*watchdogEngine).logf = t.Logf
 		e.(*watchdogEngine).fatalf = t.Fatalf
@@ -43,4 +44,48 @@ func TestWatchdog(t *testing.T) {
 		e.RequestStatus()
 		e.Close()
 	})
+}
+
+func TestWatchdogMetrics(t *testing.T) {
+	logf := func(format string, args ...any) {}
+	bus := eventbustest.NewBus(t)
+	ht := health.NewTracker(bus)
+	reg := new(usermetric.Registry)
+	e, err := NewFakeUserspaceEngine(logf, 0, ht, reg, bus)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e = NewWatchdog(e, reg)
+	w := e.(*watchdogEngine)
+	// 0 is not valid
+	w.maxWait = 1 * time.Microsecond
+	// Swallow the stack trace logs and fatal logs.
+	w.logf = logf
+	w.fatalf = logf
+
+	timer := time.NewTimer(1 * time.Millisecond)
+	done := make(chan struct{})
+	w.watchdog(RequestStatus, func() {
+		<-timer.C
+		close(done)
+	})
+	w.watchdog(PeerForIPEvent, func() {
+		<-timer.C
+		close(done)
+	})
+	<-done
+
+	// One RequestStatus event
+	m := w.metrics.Get(eventLabel{Type: RequestStatus})
+	got := m.(*usermetric.Gauge).Value()
+	if got < 0.99 {
+		t.Fatalf("got %f metric events for RequestStatus, want %v", got, 1)
+	}
+
+	// 2 events total
+	m = w.metrics.Get(eventLabel{Type: Any})
+	got = m.(*usermetric.Gauge).Value()
+	if got < 1.99 {
+		t.Fatalf("got %f metric events for RequestStatus, want %v", got, 2)
+	}
 }

@@ -5,4 +5,6 @@
 
 package wgengine
 
-func NewWatchdog(e Engine) Engine { return e }
+import "tailscale.com/util/usermetric"
+
+func NewWatchdog(e Engine, mr *usermetric.Registry) Engine { return e }

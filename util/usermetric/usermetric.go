@@ -70,6 +70,20 @@ func (g *Gauge) Set(v float64) {
 	g.m.Set(v)
 }
 
+func (g *Gauge) Add(v float64) {
+	if g == nil {
+		return
+	}
+	g.m.Add(v)
+}
+
+func (g *Gauge) Value() float64 {
+	if g == nil || g.m == nil {
+		return 0
+	}
+	return g.m.Value()
+}
+
 // String returns the string of the underlying expvar.Float.
 // This satisfies the expvar.Var interface.
 func (g *Gauge) String() string {
