@@ -31,6 +31,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	gossh "golang.org/x/crypto/ssh"
@@ -1315,6 +1316,68 @@ func TestStdOsUserUserAssumptions(t *testing.T) {
 	if got, want := v.NumField(), 5; got != want {
 		t.Errorf("os/user.User has %v fields; this package assumes %v", got, want)
 	}
+}
+
+func TestOnPolicyChangeNilLocalUser(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		srv := &server{
+			logf: tstest.WhileTestRunningLogger(t),
+			lb: &localState{
+				sshEnabled:   true,
+				matchingRule: newSSHRule(&tailcfg.SSHAction{Accept: true}),
+			},
+		}
+		c := &conn{
+			srv:  srv,
+			info: &sshConnInfo{sshUser: "alice"},
+		}
+		srv.activeConns = map[*conn]bool{c: true}
+
+		srv.OnPolicyChange()
+
+		synctest.Wait()
+	})
+}
+
+func TestRace(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		srv := &server{
+			logf: tstest.WhileTestRunningLogger(t),
+			lb: &localState{
+				sshEnabled:   true,
+				matchingRule: newSSHRule(&tailcfg.SSHAction{Accept: true}),
+			},
+		}
+		c := &conn{
+			srv:  srv,
+			info: &sshConnInfo{sshUser: "alice"},
+		}
+		srv.activeConns = map[*conn]bool{c: true}
+		done := make(chan struct{})
+		go func() {
+			for {
+				select {
+				case <-done:
+					return
+				default:
+					c.info = &sshConnInfo{sshUser: "alice"}
+					c.localUser = nil
+					c.localUser = &userMeta{User: user.User{Username: currentUser}}
+				}
+			}
+		}()
+
+		go func() {
+			for {
+				select {
+				case <-done:
+					return
+				default:
+					srv.OnPolicyChange()
+				}
+			}
+		}()
+	})
 }
 
 func mockRecordingServer(t *testing.T, handleRecord http.HandlerFunc) *httptest.Server {
